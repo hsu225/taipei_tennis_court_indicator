@@ -1,0 +1,29 @@
+# .NET build outputs
+bin/
+obj/
+**/bin/
+**/obj/
+
+# IDE settings
+.vs/
+.vscode/
+.idea/
+
+# Playwright local assets
+**/.playwright/
+playwright-report/
+test-results/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# User-specific
+*.user
+*.suo
+
+# Logs
+*.log
+
+# Rider cache
+.Rider*/

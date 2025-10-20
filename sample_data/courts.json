@@ -1,0 +1,23 @@
+[
+  {
+    "Id": "DAAN_FOREST",
+    "Name": "大安森林公園網球場",
+    "District": "大安區",
+    "Address": "臺北市大安區新生南路二段1號",
+    "Surface": "Hard",
+    "HasLights": true,
+    "Latitude": 25.0269,
+    "Longitude": 121.5353
+  },
+  {
+    "Id": "YANGMING",
+    "Name": "陽明運動園區網球場",
+    "District": "士林區",
+    "Address": "臺北市士林區忠誠路二段",
+    "Surface": "Hard",
+    "HasLights": false,
+    "Latitude": 25.1105,
+    "Longitude": 121.5329
+  }
+]
+

@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(dotnet run:*)",
+      "Bash(echo $env:COURTFINDER_PROVIDER)",
+      "WebFetch(domain:vbs.sports.taipei)",
+      "Bash($env:COURTFINDER_PROVIDER=\"taipei-web\")",
+      "Bash(export COURTFINDER_PROVIDER=taipei-web)",
+      "WebSearch",
+      "WebFetch(domain:iplay.sa.gov.tw)",
+      "Bash(export COURTFINDER_PROVIDER=taipei-open)",
+      "Bash(curl -s \"https://vbs.sports.taipei/opendata/sports_tms2.json\")",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet build:*)",
+      "Bash(timeout:*)",
+      "Bash(dotnet remove src/CourtFinder.Core/CourtFinder.Core.csproj package PuppeteerSharp)",
+      "Bash(pwsh:*)",
+      "Bash(dotnet exec:*)",
+      "Bash(dotnet tool install:*)",
+      "Bash(playwright install:*)",
+      "Bash(Select-String -Pattern \"mmDataPickup|VenuesCalendar|DEBUG|Court\")",
+      "Bash(Select-Object -First 50)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -1,0 +1,8 @@
+trust_level = "trusted"
+approval_policy = "on-failure"
+sandbox_mod = "workspace-write"
+full-auto = true
+bypass-approvals = true
+bypass-sandbox = true
+trusted-workspace = true
+

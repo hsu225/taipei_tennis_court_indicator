@@ -1,0 +1,9 @@
+{
+  "CourtId": "DAAN_FOREST",
+  "Date": "2025-10-01",
+  "Slots": [
+    { "Start": "06:00:00", "End": "07:00:00", "IsAvailable": true },
+    { "Start": "07:00:00", "End": "08:00:00", "IsAvailable": false },
+    { "Start": "08:00:00", "End": "09:00:00", "IsAvailable": true }
+  ]
+}
