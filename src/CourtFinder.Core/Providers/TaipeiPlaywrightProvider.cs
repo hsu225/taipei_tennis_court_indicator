@@ -278,19 +278,29 @@ public class TaipeiPlaywrightProvider : ITennisCourtProvider, IAsyncDisposable
                     var labels = await page.EvaluateAsync<string[]>(@"
                         () => {
                             const results = new Set();
-                            const nodes = Array.from(document.querySelectorAll('a,button,li,span,div'));
+                            const nodes = Array.from(document.querySelectorAll('*'));
+                            const read = (el) => {
+                                const t = (el.textContent||'').trim().replace(/\s+/g,' ');
+                                const a = (el.getAttribute('aria-label')||'').trim();
+                                const tt = (el.getAttribute('title')||'').trim();
+                                const v = (el instanceof HTMLInputElement || el instanceof HTMLButtonElement) ? (el.value||'').trim() : '';
+                                const candidates = [t,a,tt,v].filter(Boolean);
+                                return candidates;
+                            };
+                            // 支援半形/全形數字與中文數字
+                            const DIGIT = '[0-9０-９一二三四五六七八九十]+';
                             const patterns = [
-                                /^第\s*\d+\s*面\s*(NO\.?\s*\d+)?$/u,
-                                /^NO\.?\s*\d+$/iu,
-                                /^場地\s*NO\.?\s*\d+$/u,
-                                /^場地\s*\d+$/u
+                                new RegExp(`^第\s*${DIGIT}\s*面\s*(NO\.?\s*${DIGIT})?$`,'iu'),
+                                new RegExp(`^NO\.?\s*${DIGIT}$`,'iu'),
+                                new RegExp(`^場地\s*(NO\.?\s*)?${DIGIT}$`,'iu'),
+                                new RegExp(`^(Court|場)\s*${DIGIT}$`,'iu')
                             ];
                             for (const el of nodes) {
-                                const t = (el.textContent||'').trim().replace(/\s+/g,' ');
-                                if (!t) continue;
-                                if (patterns.some(p=>p.test(t))) results.add(t);
+                                for (const s of read(el)){
+                                    if (patterns.some(p=>p.test(s))) results.add(s);
+                                }
                             }
-                            return Array.from(results).slice(0, 30);
+                            return Array.from(results).slice(0, 50);
                         }
                     ");
 
@@ -327,8 +337,113 @@ public class TaipeiPlaywrightProvider : ITennisCourtProvider, IAsyncDisposable
                         }
                         catch { }
                     }
+
+                    // If still nothing collected,嘗試找下拉選單(option)型式的場地切換
+                    if (availability.Slots.Count == 0 || availability.Slots.All(s => string.IsNullOrWhiteSpace(s.SourceNote)))
+                    {
+                        var optionLabels = await page.EvaluateAsync<string[]>(@"
+                            () => {
+                                const out = [];
+                                const DIGIT = '[0-9０-９一二三四五六七八九十]+';
+                                const patterns = [
+                                  new RegExp(`^第\\s*${DIGIT}\\s*面$`,'iu'),
+                                  new RegExp(`^NO\\.?\\s*${DIGIT}$`,'iu'),
+                                  new RegExp(`^場地\\s*(NO\\.?\\s*)?${DIGIT}$`,'iu'),
+                                  new RegExp(`^(Court|場)\\s*${DIGIT}$`,'iu')
+                                ];
+                                document.querySelectorAll('select option').forEach(opt => {
+                                   const t = (opt.textContent||'').trim().replace(/\\s+/g,' ');
+                                   if (t && patterns.some(p=>p.test(t))) out.push(t);
+                                });
+                                return out.slice(0, 50);
+                            }
+                        ");
+
+                        foreach (var optText in optionLabels)
+                        {
+                            try
+                            {
+                                await page.EvaluateAsync(@"
+                                    (optText) => {
+                                        const sel = Array.from(document.querySelectorAll('select'))
+                                            .find(s => Array.from(s.options).some(o => (o.textContent||'').trim().replace(/\s+/g,' ') === optText));
+                                        if (!sel) return false;
+                                        const opt = Array.from(sel.options).find(o => (o.textContent||'').trim().replace(/\s+/g,' ') === optText);
+                                        sel.value = opt.value;
+                                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                                        return true;
+                                    }
+                                ", optText);
+                                await page.WaitForTimeoutAsync(800);
+
+                                var json = await page.EvaluateAsync<string>(@"
+                                    () => {
+                                        if (typeof mmDataPickup !== 'undefined' && mmDataPickup.Data) {
+                                            return JSON.stringify({ _C: mmDataPickup._C, Data: mmDataPickup.Data });
+                                        }
+                                        return null;
+                                    }
+                                ");
+
+                                if (string.IsNullOrEmpty(json)) continue;
+                                using var pdoc = JsonDocument.Parse(json);
+                                JsonElement dataEl;
+                                int? sh2=null, eh2=null;
+                                if (pdoc.RootElement.TryGetProperty("_C", out var cEl))
+                                {
+                                    sh2 = TryGetInt(cEl, "SH");
+                                    eh2 = TryGetInt(cEl, "EH");
+                                }
+                                if (pdoc.RootElement.TryGetProperty("Data", out dataEl))
+                                {
+                                    ParseDataPickupPerCourt(dataEl, date, availability, optText, sh2 ?? openSh, eh2 ?? openEh);
+                                    Console.WriteLine($"DEBUG: Collected slots via <select> for {optText}");
+                                }
+                            }
+                            catch { }
+                        }
+                    }
                 }
                 catch { }
+            }
+
+            // Final fallback: use static config per K if provided
+            if (availability.Slots.Count == 0 || availability.Slots.All(s => string.IsNullOrWhiteSpace(s.SourceNote)))
+            {
+                if (CourtLabelConfig.TryGetLabelsForK(courtId, out var labels) && labels.Count > 0)
+                {
+                    foreach (var label in labels)
+                    {
+                        try
+                        {
+                            await page.GetByText(label, new() { Exact = false }).First.ClickAsync();
+                            await page.WaitForTimeoutAsync(800);
+                            var json = await page.EvaluateAsync<string>(@"
+                                () => {
+                                    if (typeof mmDataPickup !== 'undefined' && mmDataPickup.Data) {
+                                        return JSON.stringify({ _C: mmDataPickup._C, Data: mmDataPickup.Data });
+                                    }
+                                    return null;
+                                }
+                            ");
+                            if (string.IsNullOrEmpty(json)) continue;
+                            using var pdoc = JsonDocument.Parse(json);
+                            JsonElement dataEl;
+                            int? sh2=null, eh2=null;
+                            if (pdoc.RootElement.TryGetProperty("_C", out var cEl))
+                            {
+                                sh2 = TryGetInt(cEl, "SH");
+                                eh2 = TryGetInt(cEl, "EH");
+                            }
+                            if (pdoc.RootElement.TryGetProperty("Data", out dataEl))
+                            {
+                                ParseDataPickupPerCourt(dataEl, date, availability, label, sh2 ?? openSh, eh2 ?? openEh);
+                                Console.WriteLine($"DEBUG: Collected {availability.Slots.Count} total after config label '{label}'");
+                            }
+                        }
+                        catch { }
+                    }
+                }
             }
 
             availability.Slots = availability.Slots.OrderBy(s => s.Start).ToList();
